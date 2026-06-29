@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>طيار - حاسبة السعر</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #1a1816; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+
+  .card { background: #231f1c; border-radius: 24px; padding: 28px 24px; width: 100%; max-width: 480px; border: 1px solid rgba(255,107,0,0.15); box-shadow: 0 0 60px rgba(255,107,0,0.08); }
+
+  .logo { text-align: center; margin-bottom: 20px; }
+  .logo-text { font-size: 32px; font-weight: 900; color: #FF6B00; letter-spacing: 2px; }
+  .logo-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 3px; }
+
+  .city-notice { background: rgba(255,107,0,0.1); border: 1px solid rgba(255,107,0,0.3); border-radius: 10px; padding: 9px 14px; text-align: center; font-size: 12px; color: rgba(255,255,255,0.65); margin-bottom: 18px; }
+
+  .step-label { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.5); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; background: #FF6B00; color: #fff; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* Search fields */
+  .search-block { margin-bottom: 12px; position: relative; }
+  .search-input {
+    width: 100%; background: #2d2825; border: 1.5px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 12px 14px; font-size: 14px; color: #fff;
+    outline: none; transition: border-color 0.2s; font-family: Arial;
+  }
+  .search-input:focus { border-color: #FF6B00; }
+  .search-input::placeholder { color: rgba(255,255,255,0.22); }
+  .search-input.selected { border-color: rgba(255,107,0,0.5); background: rgba(255,107,0,0.07); }
+
+  .suggestions {
+    position: absolute; top: 100%; right: 0; left: 0; z-index: 9999;
+    background: #2d2825; border: 1px solid rgba(255,107,0,0.3);
+    border-radius: 12px; overflow: hidden; margin-top: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+  .suggestion-item { padding: 11px 14px; font-size: 12px; color: rgba(255,255,255,0.75); cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s; }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:hover { background: rgba(255,107,0,0.15); color: #fff; }
+  .suggestion-item .s-name { font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .suggestion-item .s-sub { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  /* Mini map open button */
+  .open-map-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #2d2825; border: 1.5px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .open-map-bar:hover { border-color: rgba(255,107,0,0.4); }
+  .open-map-bar-text { font-size: 13px; color: rgba(255,255,255,0.5); }
+  .open-map-bar-pins { display: flex; gap: 8px; }
+  .pin-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; }
+  .pin-dot.green { background: #22c55e; }
+  .pin-dot.red { background: #ef4444; }
+  .pin-dot.empty { background: transparent; border-color: rgba(255,255,255,0.2); }
+
+  /* Calc button */
+  .calc-btn { width: 100%; background: #FF6B00; border: none; color: #fff; font-size: 15px; font-weight: 700; padding: 14px; border-radius: 12px; cursor: pointer; margin: 4px 0 14px; transition: all 0.2s; font-family: Arial; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .calc-btn:hover { background: #e55a00; }
+  .calc-btn:active { transform: scale(0.98); }
+  .calc-btn:disabled { background: #3a3330; color: rgba(255,255,255,0.3); cursor: not-allowed; }
+  .spinner { width: 17px; height: 17px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  .result-box { background: linear-gradient(135deg, #FF6B00, #e55a00); border-radius: 16px; padding: 22px; text-align: center; margin-bottom: 14px; position: relative; overflow: hidden; display: none; }
+  .result-box.visible { display: block; }
+  .result-box::before { content:''; position:absolute; top:-25px; right:-25px; width:90px; height:90px; border-radius:50%; background:rgba(255,255,255,0.08); }
+  .result-box::after { content:''; position:absolute; bottom:-18px; left:-18px; width:65px; height:65px; border-radius:50%; background:rgba(255,255,255,0.06); }
+  .result-label { font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; }
+  .result-price { font-size: 48px; font-weight: 900; color: #fff; line-height: 1; position: relative; z-index: 1; }
+  .result-currency { font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.8); }
+
+  .breakdown { background: #2d2825; border-radius: 12px; padding: 14px; font-size: 13px; display: none; }
+  .breakdown.visible { display: block; }
+  .breakdown-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; color:rgba(255,255,255,0.55); }
+  .breakdown-row.total-row { color:#fff; font-weight:700; font-size:14px; border-top:1px solid rgba(255,255,255,0.08); margin-top:5px; padding-top:9px; }
+
+  .error-msg { color:#ff6b6b; font-size:12px; text-align:center; margin: 6px 0; display:none; }
+  .time-info { text-align:center; font-size:11px; color:rgba(255,255,255,0.25); margin-top:14px; }
+
+  /* ===== FULLSCREEN MAP OVERLAY ===== */
+  .map-overlay { display: none; position: fixed; inset: 0; z-index: 99999; background: #1a1816; flex-direction: column; }
+  .map-overlay.open { display: flex; }
+
+  .map-header { background: #231f1c; padding: 12px 16px; border-bottom: 1px solid rgba(255,107,0,0.2); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+
+  .map-header-top { display: flex; align-items: center; justify-content: space-between; }
+  .map-title { font-size: 15px; font-weight: 700; color: #FF6B00; }
+  .map-hint-text { font-size: 12px; color: rgba(255,255,255,0.45); }
+  .close-btn { background: rgba(255,255,255,0.08); border: none; color: #fff; width: 34px; height: 34px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* Search inside map */
+  .map-search-row { display: flex; gap: 8px; position: relative; }
+  .map-search-wrap { flex: 1; position: relative; }
+  .map-search-input { width: 100%; background: #2d2825; border: 1.5px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: #fff; outline: none; font-family: Arial; transition: border-color 0.2s; }
+  .map-search-input:focus { border-color: #FF6B00; }
+  .map-search-input::placeholder { color: rgba(255,255,255,0.25); }
+  .map-search-suggestions { position: absolute; top: 100%; right: 0; left: 0; z-index: 99999; background: #2d2825; border: 1px solid rgba(255,107,0,0.3); border-radius: 10px; overflow: hidden; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+  .map-search-suggestions .suggestion-item { font-size: 12px; }
+
+  #fullMap { flex: 1; width: 100%; }
+
+  .map-footer { background: #231f1c; padding: 12px 16px; border-top: 1px solid rgba(255,107,0,0.2); flex-shrink: 0; }
+  .map-steps { display: flex; gap: 8px; margin-bottom: 10px; }
+  .map-step-pill { flex: 1; padding: 8px 10px; border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.06); background: #2d2825; }
+  .map-step-pill.active { border-color: #FF6B00; background: rgba(255,107,0,0.08); }
+  .map-step-pill.done { border-color: rgba(255,107,0,0.3); }
+  .pill-label { font-size: 10px; color: rgba(255,255,255,0.4); margin-bottom: 2px; }
+  .pill-val { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill-val.set { color: #fff; }
+
+  .confirm-btn { width: 100%; background: #FF6B00; border: none; color: #fff; font-size: 15px; font-weight: 700; padding: 13px; border-radius: 12px; cursor: pointer; font-family: Arial; transition: all 0.2s; }
+  .confirm-btn:disabled { background: #3a3330; color: rgba(255,255,255,0.3); cursor: not-allowed; }
+  .confirm-btn:not(:disabled):hover { background: #e55a00; }
+
+  /* Order button */
+  .order-btn { width: 100%; background: #25D366; border: none; color: #fff; font-size: 15px; font-weight: 700; padding: 14px; border-radius: 12px; cursor: pointer; margin: 10px 0 0; transition: all 0.2s; font-family: Arial; align-items: center; justify-content: center; gap: 10px; display: none; }
+  .order-btn:hover { background: #1ebe5d; }
+  .order-btn:active { transform: scale(0.98); }
+  .order-btn.visible { display: flex !important; }
+  .wa-icon { width: 22px; height: 22px; flex-shrink: 0; }
+
+  /* Custom zoom buttons dark theme */
+  .leaflet-control-zoom a { background: #2d2825 !important; color: #fff !important; border-color: rgba(255,107,0,0.3) !important; font-size: 16px !important; }
+  .leaflet-control-zoom a:hover { background: #FF6B00 !important; }
+  .leaflet-attribution-flag { display: none !important; }
+  .leaflet-control-attribution { background: rgba(26,24,22,0.8) !important; color: rgba(255,255,255,0.4) !important; font-size: 10px !important; }
+  .leaflet-control-attribution a { color: #FF6B00 !important; }
+  .leaflet-popup-content-wrapper { background: #231f1c !important; color: #fff !important; border: 1px solid rgba(255,107,0,0.3) !important; border-radius: 10px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important; }
+  .leaflet-popup-tip { background: #231f1c !important; }
+
+  /* Step progress bar */
+  .progress-bar { display: flex; gap: 6px; margin-bottom: 10px; }
+  .progress-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); transition: background 0.3s; }
+  .progress-seg.active { background: #FF6B00; }
+  .progress-seg.done { background: rgba(255,107,0,0.4); }
+
+  /* Toast notification */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #2d2825; border: 1px solid rgba(255,107,0,0.4); color: #fff;
+    padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 600;
+    z-index: 9999999; opacity: 0; transition: all 0.3s; pointer-events: none;
+    white-space: nowrap; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: rgba(34,197,94,0.5); }
+  .toast.error { border-color: rgba(255,107,107,0.5); }
+
+  /* Free ride badge */
+  .free-badge {
+    display: none; background: linear-gradient(135deg, #22c55e, #16a34a);
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 14px;
+    text-align: center; border: 1px solid rgba(34,197,94,0.3);
+    box-shadow: 0 0 20px rgba(34,197,94,0.15);
+  }
+  .free-badge.visible { display: block; }
+  .free-badge-title { font-size: 16px; font-weight: 900; color: #fff; margin-bottom: 3px; }
+  .free-badge-sub { font-size: 12px; color: rgba(255,255,255,0.75); }
+
+  /* Registration screen */
+  .reg-overlay { display: none; position: fixed; inset: 0; z-index: 999; background: #1a1816; align-items: center; justify-content: center; padding: 20px; }
+  .reg-overlay.open { display: flex; }
+  .reg-card { background: #231f1c; border-radius: 24px; padding: 32px 24px; width: 100%; max-width: 420px; border: 1px solid rgba(255,107,0,0.15); }
+  .reg-logo { text-align: center; margin-bottom: 24px; }
+  .reg-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .reg-sub { font-size: 13px; color: rgba(255,255,255,0.4); }
+  .reg-field { margin-bottom: 16px; }
+  .reg-field label { display: block; font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 6px; font-weight: 700; }
+  .reg-input { width: 100%; background: #2d2825; border: 1.5px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 13px 14px; font-size: 14px; color: #fff; outline: none; font-family: Arial; transition: border-color 0.2s; }
+  .reg-input:focus { border-color: #FF6B00; }
+  .reg-input::placeholder { color: rgba(255,255,255,0.22); }
+  .reg-btn { width: 100%; background: #FF6B00; border: none; color: #fff; font-size: 15px; font-weight: 700; padding: 14px; border-radius: 12px; cursor: pointer; margin-top: 8px; font-family: Arial; transition: all 0.2s; }
+  .reg-btn:hover { background: #e55a00; }
+  .reg-btn:active { transform: scale(0.98); }
+  .reg-err { color: #ff6b6b; font-size: 12px; text-align: center; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+
+
+<!-- REGISTRATION OVERLAY -->
+<div class="reg-overlay" id="regOverlay">
+  <div class="reg-card">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-size:32px;font-weight:900;color:#FF6B00;letter-spacing:2px;">طيار</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;">TAYAR · خدمة التوصيل</div>
+    </div>
+    <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:6px;">أهلاً بيك! 👋</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:24px;">سجّل بياناتك مرة واحدة بس</div>
+    <div class="reg-field"><label>الاسم</label><input class="reg-input" id="regName" type="text" placeholder="اسمك الكامل" /></div>
+    <div class="reg-field"><label>رقم الموبايل</label><input class="reg-input" id="regPhone" type="tel" placeholder="01xxxxxxxxx" /></div>
+    <div class="reg-field"><label>البريد الإلكتروني</label><input class="reg-input" id="regEmail" type="email" placeholder="example@email.com" /></div>
+    <button class="reg-btn" onclick="submitReg()">ابدأ الطلب ←</button>
+    <div class="reg-err" id="regErr">من فضلك املأ كل البيانات صح</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-text">طيار</div>
+    <div class="logo-sub">TAYAR · حاسبة السعر</div>
+  </div>
+
+  <div class="city-notice">
+    📍 الخدمة متاحة داخل <strong style="color:#FF6B00">مدينة العاشر من رمضان</strong> فقط
+  </div>
+
+  <!-- Free ride badge -->
+  <div class="free-badge" id="freeBadge">
+    <div class="free-badge-title">🎁 مبروك! أول مشوار مجاني 100%</div>
+    <div class="free-badge-sub">سجّل طلبك وهيوصلك مجاناً</div>
+  </div>
+
+  <!-- From -->
+  <div class="step-label" style="margin-bottom:8px">
+    <div class="step-num">١</div> نقطة الانطلاق
+  </div>
+  <div class="search-block">
+    <input type="text" class="search-input" id="fromInput" placeholder="ابحث عن نقطة الانطلاق..." oninput="searchAddr('from')" autocomplete="off" />
+    <div class="suggestions" id="fromSug" style="display:none"></div>
+  </div>
+
+  <!-- To -->
+  <div class="step-label" style="margin-bottom:8px; margin-top:4px">
+    <div class="step-num">٢</div> الوجهة
+  </div>
+  <div class="search-block">
+    <input type="text" class="search-input" id="toInput" placeholder="ابحث عن الوجهة..." oninput="searchAddr('to')" autocomplete="off" />
+    <div class="suggestions" id="toSug" style="display:none"></div>
+  </div>
+
+  <!-- Open map bar -->
+  <div class="open-map-bar" onclick="openMap()">
+    <span class="open-map-bar-text" id="mapBarText">🗺️ أو حدد على الخريطة مباشرة</span>
+    <div class="open-map-bar-pins">
+      <div class="pin-dot green empty" id="fromDot"></div>
+      <div class="pin-dot red empty" id="toDot"></div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <button class="calc-btn" id="calcBtn" onclick="calculateRoute()">
+    <div class="spinner" id="spinner"></div>
+    <span id="calcBtnText">احسب السعر</span>
+  </button>
+
+  <div class="result-box" id="resultBox">
+    <div class="result-label">إجمالي الرحلة</div>
+    <div class="result-price"><span id="totalPrice">٠</span><span class="result-currency"> ج</span></div>
+  </div>
+
+  <div class="breakdown" id="breakdown">
+    <div class="breakdown-row"><span>رسوم البداية</span><span>١٠ ج</span></div>
+    <div class="breakdown-row">
+      <span>المسافة (<span id="kmLabel">٠</span> كم × ٥)</span>
+      <span id="kmCost">٠ ج</span>
+    </div>
+    <div class="breakdown-row total-row"><span>الإجمالي</span><span id="totalBreakdown">٠ ج</span></div>
+  </div>
+
+  <button class="order-btn" id="orderBtn" onclick="orderOnWhatsApp()">
+    <svg class="wa-icon" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+    اطلب الآن عبر واتساب
+  </button>
+
+  <div class="time-info" id="timeInfo"></div>
+  <div style="text-align:center;margin-top:10px;">
+    <button onclick="exportUsers()" style="background:none;border:none;color:rgba(255,255,255,0.2);font-size:10px;cursor:pointer;font-family:Arial;padding:4px 8px;">⬇ تصدير بيانات العملاء</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- FULLSCREEN MAP -->
+<div class="map-overlay" id="mapOverlay">
+  <div class="map-header">
+    <div class="map-header-top">
+      <div>
+        <div class="map-title" id="mapTitle">حدد نقطة الانطلاق</div>
+        <div class="map-hint-text" id="mapHint">ابحث أو اضغط على الخريطة</div>
+      </div>
+      <button class="close-btn" onclick="closeMap()">✕</button>
+    </div>
+    <!-- Search inside map -->
+    <div class="map-search-row">
+      <div class="map-search-wrap">
+        <input type="text" class="map-search-input" id="mapSearchInput" placeholder="ابحث عن عنوان..." oninput="mapSearch()" autocomplete="off" />
+        <div class="map-search-suggestions" id="mapSearchSug" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="fullMap"></div>
+
+  <div class="map-footer">
+    <div class="progress-bar">
+      <div class="progress-seg" id="seg1"></div>
+      <div class="progress-seg" id="seg2"></div>
+    </div>
+    <div class="map-steps">
+      <div class="map-step-pill" id="pill1">
+        <div class="pill-label">🟢 الانطلاق</div>
+        <div class="pill-val" id="pill1Val">لم يتم التحديد</div>
+      </div>
+      <div class="map-step-pill" id="pill2">
+        <div class="pill-label">🔴 الوجهة</div>
+        <div class="pill-val" id="pill2Val">في انتظار الانطلاق</div>
+      </div>
+    </div>
+    <button class="confirm-btn" id="confirmBtn" disabled onclick="confirmPins()">تأكيد التحديد</button>
+  </div>
+</div>
+
+<script>
+
+  // ===== REGISTRATION =====
+  function isFirstRide() {
+    // true لو المستخدم مسجل بس لسه معملش المشوار المجاني
+    const user = localStorage.getItem("tayar_user");
+    const usedFree = localStorage.getItem("tayar_free_used");
+    return !!user && !usedFree;
+  }
+
+  function checkReg() {
+    const user = localStorage.getItem("tayar_user");
+    if (!user) {
+      document.getElementById("regOverlay").className = "reg-overlay open";
+    } else {
+      // لو مسجل بس لسه معملش المشوار المجاني
+      if (isFirstRide()) {
+        document.getElementById("freeBadge").className = "free-badge visible";
+        try {
+          const u = JSON.parse(user);
+          document.getElementById("timeInfo").textContent = "أهلاً " + u.name + " 👋";
+        } catch(e) {}
+      } else {
+        try {
+          const u = JSON.parse(user);
+          document.getElementById("timeInfo").textContent = "أهلاً " + u.name + " 👋";
+        } catch(e) {}
+      }
+    }
+  }
+
+  function submitReg() {
+    const name  = document.getElementById("regName").value.trim();
+    const phone = document.getElementById("regPhone").value.trim();
+    const email = document.getElementById("regEmail").value.trim();
+    const errEl = document.getElementById("regErr");
+    
+    if (!name || phone.length < 10 || !email.includes("@")) {
+      errEl.style.display = "block";
+      return;
+    }
+    errEl.style.display = "none";
+
+    const user = { name, phone, email, date: new Date().toISOString() };
+
+    // حفظ في localStorage كـ array (يدعم أكثر من مستخدم على نفس الجهاز)
+    let users = [];
+    try { users = JSON.parse(localStorage.getItem("tayar_users") || "[]"); } catch(e) {}
+    // تجنب التكرار بناءً على رقم الموبايل
+    if (!users.find(u => u.phone === phone)) {
+      users.push(user);
+    }
+    localStorage.setItem("tayar_users", JSON.stringify(users));
+    // احفظ المستخدم الحالي أيضاً بـ key منفصل
+    localStorage.setItem("tayar_user", JSON.stringify(user));
+
+    // أغلق الـ overlay وأظهر رسالة ترحيب + badge المشوار المجاني
+    document.getElementById("regOverlay").className = "reg-overlay";
+    document.getElementById("timeInfo").textContent = "أهلاً " + name + " 👋";
+    document.getElementById("freeBadge").className = "free-badge visible";
+    showToast("✅ أهلاً بيك " + name + "! احسب أول مشوار مجاني دلوقتي 🎁", "success");
+
+    // إرسال البيانات إلى جوجل شيت (no-cors = مش هنعرف نتحقق من الرد، ده طبيعي)
+    fetch("https://script.google.com/macros/s/AKfycbw306xEVBKtuIFb0Nz7g4FW4P4Fvn5XuG6Ico6bYRLQJgJpNT5ikNlKN65i25m9-o3USA/exec", {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, phone, email })
+    }).catch(() => {}); // no-cors دايمًا بيرجع opaque response — مش error حقيقي
+  }
+
+  function exportUsers() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem("tayar_users") || "[]"); } catch(e) {}
+
+    // fallback: لو في مستخدم محفوظ بالـ key القديم بس مش موجود في الـ array
+    if (!list.length) {
+      try {
+        const single = JSON.parse(localStorage.getItem("tayar_user") || "null");
+        if (single) list = [single];
+      } catch(e) {}
+    }
+
+    if (!list.length) { showToast("⚠️ مفيش بيانات عملاء لحد دلوقتي", "error"); return; }
+
+    const rows = ["\uFEFFالاسم,الموبايل,الإيميل,تاريخ التسجيل"];
+    list.forEach(u => {
+      // تنظيف الحقول من الفواصل لو موجودة
+      const name  = (u.name  || "").replace(/,/g, " ");
+      const phone = (u.phone || "").replace(/,/g, " ");
+      const email = (u.email || "").replace(/,/g, " ");
+      const date  = u.date ? new Date(u.date).toLocaleString('ar-EG') : "";
+      rows.push(`${name},${phone},${email},${date}`);
+    });
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tayar_users.csv";
+    a.click();
+    showToast(`✅ تم تصدير ${list.length} عميل`, "success");
+  }
+
+  checkReg();
+
+  const BASE_FARE = 10;
+  const PRICE_PER_KM = 5;
+  const CITY = [30.296, 31.748];
+
+  let fromCoords = null, toCoords = null;
+  let mapStep = 'from';
+  let fullMap = null, fromMarker = null, toMarker = null;
+  let searchTimers = {};
+  let mapSearchTimer = null;
+  let tmpFrom = null, tmpTo = null;
+
+  // Auto-detect user location on load
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      fromCoords = { lat, lon };
+      // Reverse geocode to get name
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, { headers: { 'Accept-Language': 'ar' } })
+        .then(r => r.json())
+        .then(d => {
+          const name = d.display_name ? d.display_name.split(',').slice(0,2).join(', ') : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+          document.getElementById('fromInput').value = name;
+          document.getElementById('fromInput').classList.add('selected');
+        })
+        .catch(() => {
+          document.getElementById('fromInput').value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+          document.getElementById('fromInput').classList.add('selected');
+        });
+      updateMapBar();
+    }, () => {}, { enableHighAccuracy: true });
+  }
+
+  const greenIcon = L.divIcon({
+    html: `<div style="
+      background:#22c55e; width:26px; height:26px; border-radius:50%;
+      border:3px solid #fff; box-shadow:0 3px 14px rgba(34,197,94,0.6);
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; color:#fff; font-weight:900;
+    ">A</div>`,
+    iconSize:[26,26], iconAnchor:[13,13], className:''
+  });
+  const redIcon = L.divIcon({
+    html: `<div style="
+      background:#ef4444; width:26px; height:26px; border-radius:50%;
+      border:3px solid #fff; box-shadow:0 3px 14px rgba(239,68,68,0.6);
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; color:#fff; font-weight:900;
+    ">B</div>`,
+    iconSize:[26,26], iconAnchor:[13,13], className:''
+  });
+  let routeLine = null;
+
+  /* ---- MAIN CARD SEARCH ---- */
+  async function searchAddr(type) {
+    const id = type==='from' ? 'fromInput' : 'toInput';
+    const sugId = type==='from' ? 'fromSug' : 'toSug';
+    const q = document.getElementById(id).value.trim();
+    if (type==='from') { fromCoords=null; document.getElementById(id).classList.remove('selected'); }
+    else { toCoords=null; document.getElementById(id).classList.remove('selected'); }
+    if (q.length < 2) { document.getElementById(sugId).style.display='none'; return; }
+    clearTimeout(searchTimers[type]);
+    searchTimers[type] = setTimeout(async () => {
+      const data = await smartSearch(q);
+      renderSuggestions(sugId, data, (lat,lon,name) => {
+        document.getElementById(id).value = name;
+        document.getElementById(id).classList.add('selected');
+        document.getElementById(sugId).style.display='none';
+        if (type==='from') fromCoords={lat,lon};
+        else toCoords={lat,lon};
+        updateMapBar();
+        hideResult();
+      });
+    }, 250);
+  }
+
+  /* ---- MAP SEARCH (inside overlay) ---- */
+  async function mapSearch() {
+    const q = document.getElementById('mapSearchInput').value.trim();
+    if (q.length < 2) { document.getElementById('mapSearchSug').style.display='none'; return; }
+    clearTimeout(mapSearchTimer);
+    mapSearchTimer = setTimeout(async () => {
+      const data = await smartSearch(q);
+      renderSuggestions('mapSearchSug', data, (lat,lon,name) => {
+        document.getElementById('mapSearchInput').value = name;
+        document.getElementById('mapSearchSug').style.display='none';
+        fullMap.once('moveend', () => placePin(lat, lon));
+        fullMap.flyTo([lat,lon], 16);
+      });
+    }, 250);
+  }
+
+  /* ---- SMART SEARCH: Photon أولاً ثم Nominatim كـ fallback ---- */
+  async function smartSearch(q) {
+    try {
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(q + ' العاشر من رمضان')}&limit=5&lang=ar&lat=30.296&lon=31.742&zoom=12`;
+      const res = await fetch(photonUrl);
+      const json = await res.json();
+      if (json.features && json.features.length) {
+        return json.features.map(f => ({
+          lat: f.geometry.coordinates[1],
+          lon: f.geometry.coordinates[0],
+          display_name: buildPhotonName(f.properties)
+        }));
+      }
+    } catch(e) {}
+    return await nominatim(q);
+  }
+
+  function buildPhotonName(p) {
+    const parts = [p.name, p.street, p.city || p.county, p.country].filter(Boolean);
+    return parts.join('، ');
+  }
+
+  /* ---- NOMINATIM (fallback) ---- */
+  async function nominatim(q) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q+' العاشر من رمضان مصر')}&format=json&limit=4&countrycodes=eg`, {headers:{'Accept-Language':'ar'}});
+      return await res.json();
+    } catch(e) { return []; }
+  }
+
+  /* ---- RENDER SUGGESTIONS ---- */
+  function renderSuggestions(containerId, data, onSelect) {
+    const box = document.getElementById(containerId);
+    if (!data.length) { box.style.display='none'; return; }
+    box.innerHTML = data.map((r,i) => {
+      const raw = r.display_name || '';
+      const parts = raw.split(/،|,/);
+      const name = parts[0].trim();
+      const sub = parts.slice(1,3).join('،').trim();
+      return `<div class="suggestion-item" data-i="${i}">
+        <div class="s-name">${name}</div>
+        ${sub ? `<div class="s-sub">${sub}</div>` : ''}
+      </div>`;
+    }).join('');
+    box.style.display='block';
+    box.querySelectorAll('.suggestion-item').forEach((el,i) => {
+      el.onclick = () => onSelect(parseFloat(data[i].lat), parseFloat(data[i].lon), data[i].display_name);
+    });
+  }
+
+  /* ---- MAP BAR UPDATE ---- */
+  function updateMapBar() {
+    const fd = document.getElementById('fromDot');
+    const td = document.getElementById('toDot');
+    fd.className = fromCoords ? 'pin-dot green' : 'pin-dot green empty';
+    td.className = toCoords ? 'pin-dot red' : 'pin-dot red empty';
+    if (fromCoords && toCoords) document.getElementById('mapBarText').textContent = '🗺️ تم تحديد النقطتين — اضغط لتعديل';
+    else if (fromCoords) document.getElementById('mapBarText').textContent = '🗺️ حدد الوجهة على الخريطة';
+    else document.getElementById('mapBarText').textContent = '🗺️ أو حدد على الخريطة مباشرة';
+  }
+
+  /* ---- OPEN / CLOSE MAP ---- */
+  function openMap() {
+    document.getElementById('mapOverlay').className = 'map-overlay open';
+    if (!fullMap) {
+      fullMap = L.map('fullMap', { zoomControl: false }).setView(CITY, 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19
+      }).addTo(fullMap);
+      L.control.zoom({ position: 'bottomleft' }).addTo(fullMap);
+      fullMap.on('click', e => placePin(e.latlng.lat, e.latlng.lng));
+    }
+    setTimeout(() => fullMap.invalidateSize(), 100);
+
+    // restore existing pins if any
+    tmpFrom = fromCoords ? {...fromCoords} : null;
+    tmpTo   = toCoords   ? {...toCoords}   : null;
+    if (fromMarker) fullMap.removeLayer(fromMarker), fromMarker=null;
+    if (toMarker)   fullMap.removeLayer(toMarker),   toMarker=null;
+    if (tmpFrom) {
+      fromMarker = L.marker([tmpFrom.lat,tmpFrom.lon],{icon:greenIcon}).addTo(fullMap).bindPopup('موقعك الحالي').openPopup();
+      fullMap.setView([tmpFrom.lat, tmpFrom.lon], 15);
+    }
+    if (tmpTo)   { toMarker = L.marker([tmpTo.lat,tmpTo.lon],{icon:redIcon}).addTo(fullMap); }
+
+    // set step
+    mapStep = tmpFrom ? (tmpTo ? 'done' : 'to') : 'from';
+    refreshMapUI();
+  }
+
+  function closeMap() {
+    document.getElementById('mapOverlay').className = 'map-overlay';
+    document.getElementById('mapSearchInput').value = '';
+    document.getElementById('mapSearchSug').style.display='none';
+  }
+
+  function confirmPins() {
+    fromCoords = tmpFrom;
+    toCoords   = tmpTo;
+    // also update text inputs
+    if (fromCoords) { document.getElementById('fromInput').value = `${fromCoords.lat.toFixed(4)}, ${fromCoords.lon.toFixed(4)}`; document.getElementById('fromInput').classList.add('selected'); }
+    if (toCoords)   { document.getElementById('toInput').value   = `${toCoords.lat.toFixed(4)}, ${toCoords.lon.toFixed(4)}`;   document.getElementById('toInput').classList.add('selected'); }
+    updateMapBar();
+    hideResult();
+    closeMap();
+  }
+
+  /* ---- PLACE PIN ON MAP ---- */
+  function placePin(lat, lon) {
+    if (mapStep === 'from' || mapStep === 'done') {
+      // always allow re-placing from if clicked again after done
+      if (mapStep === 'done') { mapStep = 'from'; showToast('🟢 حدد نقطة الانطلاق الجديدة'); }
+    }
+    if (mapStep === 'from') {
+      tmpFrom = {lat, lon};
+      if (fromMarker) fullMap.removeLayer(fromMarker);
+      fromMarker = L.marker([lat,lon],{icon:greenIcon}).addTo(fullMap).bindPopup('الانطلاق').openPopup();
+      mapStep = tmpTo ? 'done' : 'to';
+    } else {
+      tmpTo = {lat, lon};
+      if (toMarker) fullMap.removeLayer(toMarker);
+      toMarker = L.marker([lat,lon],{icon:redIcon}).addTo(fullMap).bindPopup('الوجهة').openPopup();
+      if (tmpFrom && tmpTo) {
+        fullMap.fitBounds([[tmpFrom.lat,tmpFrom.lon],[tmpTo.lat,tmpTo.lon]],{padding:[60,60]});
+        drawRouteLine();
+      }
+      mapStep = 'done';
+    }
+    refreshMapUI();
+  }
+
+  async function drawRouteLine() {
+    if (routeLine) { fullMap.removeLayer(routeLine); routeLine = null; }
+    if (!tmpFrom || !tmpTo) return;
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${tmpFrom.lon},${tmpFrom.lat};${tmpTo.lon},${tmpTo.lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.code === 'Ok' && data.routes[0]) {
+        const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        routeLine = L.polyline(coords, { color: '#FF6B00', weight: 4, opacity: 0.85 }).addTo(fullMap);
+        fullMap.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+      } else {
+        // fallback: خط مستقيم لو OSRM فشل
+        routeLine = L.polyline([[tmpFrom.lat, tmpFrom.lon],[tmpTo.lat, tmpTo.lon]],
+          { color: '#FF6B00', weight: 3, opacity: 0.7, dashArray: '8, 6' }).addTo(fullMap);
+      }
+    } catch(e) {
+      // fallback كمان في حالة network error
+      routeLine = L.polyline([[tmpFrom.lat, tmpFrom.lon],[tmpTo.lat, tmpTo.lon]],
+        { color: '#FF6B00', weight: 3, opacity: 0.7, dashArray: '8, 6' }).addTo(fullMap);
+    }
+  }
+
+  function refreshMapUI() {
+    // progress
+    document.getElementById('seg1').className = 'progress-seg ' + (tmpFrom ? 'done' : (mapStep==='from'?'active':''));
+    document.getElementById('seg2').className = 'progress-seg ' + (tmpTo ? 'done' : (mapStep==='to'?'active':''));
+
+    // pills
+    document.getElementById('pill1').className = 'map-step-pill ' + (tmpFrom ? 'done' : (mapStep==='from'?'active':''));
+    document.getElementById('pill1Val').className = 'pill-val ' + (tmpFrom?'set':'');
+    document.getElementById('pill1Val').textContent = tmpFrom ? `${tmpFrom.lat.toFixed(4)}, ${tmpFrom.lon.toFixed(4)}` : 'لم يتم التحديد';
+
+    document.getElementById('pill2').className = 'map-step-pill ' + (tmpTo ? 'done' : (mapStep==='to'?'active':''));
+    document.getElementById('pill2Val').className = 'pill-val ' + (tmpTo?'set':'');
+    document.getElementById('pill2Val').textContent = tmpTo ? `${tmpTo.lat.toFixed(4)}, ${tmpTo.lon.toFixed(4)}` : (tmpFrom ? 'اضغط لتحديد الوجهة' : 'في انتظار الانطلاق');
+
+    // title
+    if (!tmpFrom) { document.getElementById('mapTitle').textContent='حدد نقطة الانطلاق'; document.getElementById('mapHint').textContent='ابحث أو اضغط على الخريطة'; }
+    else if (!tmpTo) { document.getElementById('mapTitle').textContent='حدد الوجهة'; document.getElementById('mapHint').textContent='ابحث أو اضغط على الخريطة'; }
+    else { document.getElementById('mapTitle').textContent='✅ تم التحديد'; document.getElementById('mapHint').textContent='اضغط تأكيد أو عدّل الموقع'; }
+
+    // confirm button
+    document.getElementById('confirmBtn').disabled = !(tmpFrom && tmpTo);
+  }
+
+  /* ---- CALCULATE ---- */
+  async function calculateRoute() {
+    document.getElementById('errorMsg').style.display='none';
+    if (!fromCoords || !toCoords) { showError('حدد نقطة الانطلاق والوجهة أولاً'); return; }
+    setLoading(true);
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${fromCoords.lon},${fromCoords.lat};${toCoords.lon},${toCoords.lat}?overview=false`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.code !== 'Ok') throw new Error();
+      showResult(data.routes[0].distance / 1000);
+    } catch(e) { showError('تعذر حساب المسافة، جرب مرة تانية'); }
+    finally { setLoading(false); }
+  }
+
+  let lastOrderData = {};
+
+  function showResult(distKm) {
+    const kmCost = distKm * PRICE_PER_KM;
+    const total = Math.ceil(BASE_FARE + kmCost);
+    const dist = Math.round(distKm*10)/10;
+    document.getElementById('totalPrice').textContent = ar(total);
+    document.getElementById('totalBreakdown').textContent = ar(total)+' ج';
+    document.getElementById('kmLabel').textContent = ar(dist);
+    document.getElementById('kmCost').textContent = ar(Math.round(kmCost))+' ج';
+    document.getElementById('resultBox').className = 'result-box visible';
+    document.getElementById('breakdown').className = 'breakdown visible';
+    document.getElementById('orderBtn').className = 'order-btn visible';
+    lastOrderData = {
+      from: document.getElementById('fromInput').value || `${fromCoords.lat.toFixed(4)}, ${fromCoords.lon.toFixed(4)}`,
+      to: document.getElementById('toInput').value || `${toCoords.lat.toFixed(4)}, ${toCoords.lon.toFixed(4)}`,
+      fromCoords, toCoords, dist, total
+    };
+  }
+
+  function orderOnWhatsApp() {
+    const d = lastOrderData;
+    const freeRide = isFirstRide();
+    const fromMaps = `https://maps.google.com/?q=${d.fromCoords.lat},${d.fromCoords.lon}`;
+    const toMaps   = `https://maps.google.com/?q=${d.toCoords.lat},${d.toCoords.lon}`;
+
+    // اسم العميل
+    let clientName = '';
+    try { clientName = JSON.parse(localStorage.getItem("tayar_user") || '{}').name || ''; } catch(e) {}
+
+    const priceLine = freeRide
+      ? `💰 سعر المشوار: ${d.total} جنيه\n🎁 العميل بيدفع: *مجاني 100%* (أول مشوار)`
+      : `💰 السعر المتوقع: ${d.total} جنيه`;
+
+    const freeTag = freeRide ? `\n🎁 *أول مشوار مجاني للعميل*` : '';
+
+    const msg =
+`🛵 *طلب توصيل جديد - طيار*${freeTag}
+
+👤 العميل: ${clientName}
+
+📍 *الانطلاق:*
+${d.from}
+${fromMaps}
+
+🏁 *الوجهة:*
+${d.to}
+${toMaps}
+
+📏 المسافة: ${d.dist} كم
+${priceLine}
+
+⏰ وقت الطلب: ${new Date().toLocaleString('ar-EG')}`;
+
+    // سجّل إن المشوار المجاني اتاستخدم
+    if (freeRide) {
+      localStorage.setItem("tayar_free_used", "1");
+      document.getElementById("freeBadge").className = "free-badge";
+    }
+
+    const url = `https://wa.me/201142263460?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+
+  function hideResult() { document.getElementById('resultBox').className='result-box'; document.getElementById('breakdown').className='breakdown'; document.getElementById('orderBtn').className='order-btn'; }
+  function showError(msg) { const el=document.getElementById('errorMsg'); el.textContent='⚠️ '+msg; el.style.display='block'; }
+  function setLoading(v) { document.getElementById('spinner').style.display=v?'block':'none'; document.getElementById('calcBtnText').textContent=v?'جاري الحساب...':'احسب السعر'; document.getElementById('calcBtn').disabled=v; }
+  function ar(n) { return n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]); }
+
+  let toastTimer = null;
+  function showToast(msg, type='') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast' + (type ? ' '+type : '') + ' show';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast' + (type ? ' '+type : ''); }, 3000);
+  }
+
+  // Close suggestions on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-block') && !e.target.closest('.map-search-wrap')) {
+      document.querySelectorAll('.suggestions, .map-search-suggestions').forEach(s=>s.style.display='none');
+    }
+  });
+
+  // Time
+  function updateTime() {
+    const now=new Date(), h=now.getHours(), m=now.getMinutes().toString().padStart(2,'0');
+    document.getElementById('timeInfo').textContent=`الوقت: ${h%12||12}:${m} ${h>=12?'م':'ص'}`;
+  }
+  updateTime();
+  setInterval(updateTime, 60000);
+</script>
+</body>
+</html>
